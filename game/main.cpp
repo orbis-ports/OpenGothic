@@ -19,6 +19,7 @@
 #include <cstdio>    // fopen/fgets, for /data/tempest-env.txt
 #include <cstring>   // strchr/strpbrk, same
 #include "ps4_app.h"
+#include "orbis_paths.h"
 #include "og_ps4_boot.h"
 #define PS4_STAGE(x) ps4_log("stage: " x)
 #else
@@ -104,6 +105,13 @@ int main(int argc,const char** argv) {
   // /app0/ps4-run.cfg. Everything after this line - including a refusal to start - is
   // observable off the console; anything before it is not.
   ps4_app_init("opengothic",PS4_APP_STAMP);
+  // ⚠ BEFORE THE FIRST FILE IS OPENED, AND KEEPING THE NAME THIS TITLE ALREADY WROTE ITS SAVES
+  // UNDER. orbis-compat anchors every relative path - this process has no working directory at all,
+  // getcwd is ENOSYS - and until 2026-08-28 the root was the literal `/data/OpenGothic/` compiled
+  // into the overlay, which meant three other titles linking it wrote into this game's directory.
+  // The overlay now derives the root from the title id unless the application names one. Naming it
+  // here is what keeps `/data/OpenGothic/save_slot_N.sav` where the saves already are.
+  orbis_set_anchor_root("/data/OpenGothic/");
   // ⚠ NO DRIVER KNOB IS FORCED HERE, AND THAT IS A DELIBERATE INVERSION.
   //
   // This block used to setenv() ORBIS_DRM_TRACE, RADV_DEBUG, ORBIS_TRACE_SUBMITS, ORBIS_DUMP_SUBMIT,
