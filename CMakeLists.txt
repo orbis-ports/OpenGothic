@@ -32,7 +32,8 @@ add_executable(${PROJECT_NAME})
 # Tempest fork any more:
 #
 #   ps4/            THIS TITLE's: the game-data discovery, the silent sound backend, the on-screen
-#                   keyboard and the C++20 shim. See ps4/og_ps4_boot.h for the data-root rules.
+#                   keyboard, the "connect a keyboard" notice and the C++20 shim. See
+#                   ps4/og_ps4_boot.h for the data-root rules.
 #   orbis-compat/   THE PLATFORM's: the SDK corrections, the Vulkan C ABI (vkloader) and the console
 #                   log channel (optional/, ps4-app). Shared with Mesa and the CTS.
 #
@@ -112,6 +113,9 @@ if(PS4)
     # the note above. It is here rather than in Engine/ because it is OpenGothic's save menu that
     # needs it. See og_ps4_ime.h for what the ime probes measured.
     "${OG_PS4_SRC}/og_ps4_ime.cpp"
+    # The "connect a keyboard" notice: the Tempest backend reads a USB keyboard and mouse only, so
+    # without a keyboard there is no input at all. See og_ps4_input.h.
+    "${OG_PS4_SRC}/og_ps4_input.cpp"
     # TEMPEST_BUILD_AUDIO is forced OFF for PS4 and libTempest.a therefore defines no
     # sound symbols, while the headers stay unguarded - so one of these two links an
     # implementation of them. Both files are always compiled and each guards its whole

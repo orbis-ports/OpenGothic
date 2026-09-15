@@ -26,6 +26,10 @@
 #include "commandline.h"
 #include "gothic.h"
 
+#if defined(__PS4__)
+#include "og_ps4_input.h"
+#endif
+
 using namespace Tempest;
 
 MainWindow::MainWindow(Device& device)
@@ -1249,6 +1253,10 @@ void MainWindow::render(){
       }
     Resources::resetRecycled(cmdId);
 
+#if defined(__PS4__)
+    if(Ps4Og::keyboardNoticeChanged())
+      update();
+#endif
     if(video.isActive()) {
       video.paint(device,cmdId);
       uiLayer.clear();
@@ -1257,6 +1265,9 @@ void MainWindow::render(){
       }
     else if(needToUpdate() || Gothic::inst().checkLoading()!=Gothic::LoadState::Idle) {
       dispatchPaintEvent(uiLayer,atlas);
+#if defined(__PS4__)
+      Ps4Og::keyboardNoticePaint(uiLayer,atlas,this->w(),this->h(),Gothic::interfaceScale(this));
+#endif
 
       numOverlay.clear();
       PaintEvent p(numOverlay,atlas,this->w(),this->h());

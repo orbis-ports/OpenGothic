@@ -2,6 +2,7 @@
 
 #if defined(__PS4__)
 #include "og_ps4_ime.h"
+#include <Tempest/PS4Api>
 #endif
 
 #include <Tempest/Painter>
@@ -224,10 +225,12 @@ struct GameMenu::SavNameDialog : Dialog {
     setCursorShape(CursorShape::Hidden);
     setFocus(true);
 #if defined(__PS4__)
-    // A console has no keyboard, so keyUpEvent below never fires and every savegame is named with
-    // the bare cursor this dialog draws. The system panel is the input device; this dialog stays
-    // exactly as it is for the case where a USB keyboard IS attached, and both paths write the
-    // same `text`.
+    // With a USB keyboard attached - which the input backend requires anyway - this dialog types the
+    // name itself, exactly as on a desktop, and the system panel is not raised: while it is up the
+    // dialog swallows every key but Escape, so raising it would take the keyboard away. The panel
+    // stays for a console that has lost its keyboard, and both paths write the same `text`.
+    if(Tempest::PS4Api::isKeyboardConnected())
+      return;
     imeUp = Ps4Og::imeBegin(text);
     if(!imeUp)
       // Not fatal and not silent: the save still happens with whatever name the slot had, and

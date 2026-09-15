@@ -66,7 +66,7 @@ BUILD="${WORK}/build"
 #
 # orbis-compat must carry the loader and the toolchain file - the C ABI in front of RADV, because
 # there is no Vulkan loader on this console and there cannot be one. lib/Tempest must be the fork
-# with the Orbis SystemApi backend, without which there is no window, no pad and no clock.
+# with the Orbis SystemApi backend, without which there is no window, no input and no clock.
 # lib/ZenKit must be the one with VfsMountMode, without which resources.cpp does not compile; and
 # were it to compile, the mount would fall back to mmap, which populates eagerly here and hangs the
 # machine on ~2.7 GiB of archives.
