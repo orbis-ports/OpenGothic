@@ -342,7 +342,12 @@ if(PS4)
     # read TEMPESTOPENGOTHIC - 17 - so every package ever built was already
     # IV0000-TMPS10021_00-TEMPESTOPENGOTHI and this file named something that never shipped. The
     # value below is the one already on the console, so the content id does not move.
-    CONTENT_LABEL TEMPESTOPENGOTHI)
+    CONTENT_LABEL TEMPESTOPENGOTHI
+    # The desktop icon.ico, on an opaque 512x512 tile. Committed rather than converted at build time,
+    # so the build needs no ImageMagick. Regenerate with:
+    #   magick -size 512x512 radial-gradient:'#3a3026'-'#0e0b08' \( 'icon.ico[0]' -resize x400 \)
+    #          -gravity center -composite -alpha off -depth 8 -define png:color-type=2 ps4/icon0.png
+    ICON          ps4/icon0.png)
 endif()
 
 # installation
