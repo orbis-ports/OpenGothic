@@ -3,7 +3,9 @@ name: Build
 on:
   push:
     branches: [master]
-    tags: ['*']
+    # orbis-ports fork: PS4 release tags belong to ps4.yml. Without the exclusion this workflow's
+    # release job targets the same tag and turns the PS4 release into a draft of desktop archives.
+    tags: ['*', '!opengothic-ps4-v*']
   pull_request:
     branches: [master]
   workflow_dispatch:

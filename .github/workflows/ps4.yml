@@ -2,7 +2,9 @@
 #
 # ⚠ THIS WORKFLOW IS FOR THE FORK AND MUST NOT FIRE UPSTREAM. The branch is ps4-support, the tag
 # prefix is opengothic-ps4-v, and every job additionally refuses to run outside orbis-ports/OpenGothic.
-# Upstream's build.yml only fires on master, so the two never overlap.
+# Upstream's build.yml fires on master and on EVERY tag, and its release job also publishes to the tag
+# it ran for - so on this fork it excludes opengothic-ps4-v*. Measured 2026-09-15: the first PS4 tag
+# started both workflows, and the desktop one had to be cancelled before it reached the release.
 #
 # ⚠ GAME DATA IS NEVER PART OF THIS PIPELINE - not downloaded, not cached, not packaged (copyright).
 # The title finds a Gothic installation the console's owner put on the console, at run time
