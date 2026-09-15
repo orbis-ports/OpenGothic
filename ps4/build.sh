@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Cross-build OpenGothic for the PlayStation 4.
 #
-#   ps4/build.sh [--work <dir>] [--jobs N] [--orbis-compat <dir>] [--sound-null]
+#   ps4/build.sh [--work <dir>] [--jobs N] [--orbis-compat <dir>] [--mesa-bundle <dir>] [--sound-null]
+#
+# Mesa: a mesa-ps4 checkout with build-orbis/ (found by orbis-env.sh), or a release bundle
+# (orbis-ports/mesa-ps4 orbis-mesa-<sha>.tar.gz: include/ + build-orbis/src/...) given by
+# --mesa-bundle <dir> or by ORBIS_MESA_SRC + ORBIS_MESA_BUILD in the environment, which is what
+# .github/actions/orbis-toolchain exports.
 #
 # Builds THIS checkout in place. lib/Tempest and lib/ZenKit are expected to be the forks
 # carrying the PS4 work; everything the build produces lives under --work, nothing under
@@ -25,6 +30,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${HOME}/.cache/opengothic-ps4"
 JOBS="$(nproc)"
 SOUND_NULL=OFF
+# orbis-env.sh only knows mesa-ps4 checkouts and overwrites ORBIS_MESA_BUILD - keep a bundle given by
+# the environment.
+MESA_BUNDLE_SRC=""
+MESA_BUNDLE_BUILD=""
+if [[ -n "${ORBIS_MESA_SRC:-}" && -n "${ORBIS_MESA_BUILD:-}" ]]; then
+  MESA_BUNDLE_SRC="${ORBIS_MESA_SRC}"
+  MESA_BUNDLE_BUILD="${ORBIS_MESA_BUILD}"
+fi
 # The platform overlay: the toolchain file, the SDK corrections, the Vulkan C ABI and the log
 # channel.
 #
@@ -50,11 +63,21 @@ while [[ $# -gt 0 ]]; do
     # The silent control rung. Not a fallback for when something sounds wrong: it is the build that
     # separates "the defect is in the audio path" from "the defect is beside it".
     --sound-null) SOUND_NULL=ON; shift ;;
+    --mesa-bundle) MESA_BUNDLE_SRC="$(cd "$2" && pwd)"; MESA_BUNDLE_BUILD="${MESA_BUNDLE_SRC}/build-orbis"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 BUILD="${WORK}/build"
+
+if [[ -n "${MESA_BUNDLE_SRC}" ]]; then
+  [[ -f "${MESA_BUNDLE_SRC}/include/vulkan/vulkan.h" ]] || orbis_die "Mesa bundle ${MESA_BUNDLE_SRC} has no include/vulkan/vulkan.h"
+  [[ -f "${MESA_BUNDLE_BUILD}/src/amd/vulkan/libvulkan_radeon.a" ]] || orbis_die "Mesa bundle has no ${MESA_BUNDLE_BUILD}/src/amd/vulkan/libvulkan_radeon.a"
+  export ORBIS_MESA_DIR="${MESA_BUNDLE_SRC}"
+  export ORBIS_MESA_BUILD="${MESA_BUNDLE_BUILD}"
+  export ORBIS_RADV_ARCHIVE="${MESA_BUNDLE_BUILD}/src/amd/vulkan/libvulkan_radeon.a"
+  [[ -f "${MESA_BUNDLE_SRC}/manifest.txt" ]] && orbis_note "Mesa bundle: $(grep -E '^(bundle|mesa-commit)=' "${MESA_BUNDLE_SRC}/manifest.txt" | tr '\n' ' ')"
+fi
 
 # ⚠ THE THREE TREES THAT CARRY THE PORT ARE CHECKED, BECAUSE A STALE ONE BUILDS CLEANLY.
 #

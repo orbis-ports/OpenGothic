@@ -1,0 +1,268 @@
+# OpenGothic for the PlayStation 4: the fake-signed .pkg a console can install.
+#
+# ⚠ THIS WORKFLOW IS FOR THE FORK AND MUST NOT FIRE UPSTREAM. The branch is ps4-support, the tag
+# prefix is opengothic-ps4-v, and every job additionally refuses to run outside orbis-ports/OpenGothic.
+# Upstream's build.yml only fires on master, so the two never overlap.
+#
+# ⚠ GAME DATA IS NEVER PART OF THIS PIPELINE - not downloaded, not cached, not packaged (copyright).
+# The title finds a Gothic installation the console's owner put on the console, at run time
+# (ps4/og_ps4_boot.h).
+#
+#   pkg        cross-builds the eboot with the OpenOrbis SDK, orbis-compat and the mesa-ps4 bundle
+#              (lib/Tempest and lib/ZenKit are the orbis-ports forks, as submodules) and packages it.
+#   release    on opengothic-ps4-v<upstream version>-r<revision> tags only (e.g. opengothic-ps4-v0.92-r1):
+#              a GitHub Release with the pkg, named after the upstream version it is based on.
+
+name: CI PS4
+
+on:
+  push:
+    branches:
+      - ps4-support
+    tags:
+      - 'opengothic-ps4-v*'
+  pull_request:
+    branches:
+      - ps4-support
+  workflow_dispatch:
+    inputs:
+      orbis-compat-ref:
+        description: orbis-compat commit to build against (a sha, never a branch).
+        required: false
+        default: 44934e4b9ea723668f6ae3ed6620ceed4e605c90
+      mesa-release:
+        description: mesa-ps4 release tag whose orbis-mesa-<sha>.tar.gz to consume.
+        required: false
+        default: orbis-mesa-a4fa6b57f8bd
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ps4-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # ⚠ PINNED BY SHA / RELEASE, NOT BY BRANCH - the cache keys in the composite action are these values
+  # verbatim. They are the pins of the build tested on the console (2026-09-15):
+  #   orbis-compat 44934e4b   = ps4_create_pkg's ICON parameter, which this CMakeLists passes
+  #   orbis-mesa-a4fa6b57f8bd = the mesa-ps4 commit the console build's build-orbis was made from
+  ORBIS_COMPAT_REF: ${{ github.event.inputs.orbis-compat-ref || '44934e4b9ea723668f6ae3ed6620ceed4e605c90' }}
+  MESA_RELEASE: ${{ github.event.inputs.mesa-release || 'orbis-mesa-a4fa6b57f8bd' }}
+  OPENORBIS_SDK_TAG: v0.5.4
+
+jobs:
+  pkg:
+    if: github.repository == 'orbis-ports/OpenGothic'
+    runs-on: ubuntu-24.04
+    outputs:
+      pkg: ${{ steps.rename.outputs.pkg }}
+      sha8: ${{ steps.slug.outputs.sha8 }}
+    steps:
+      # Recursive: lib/Tempest and lib/ZenKit are the forks carrying the port, and ZenKit's own vendor/
+      # submodules (mio, libsquish) are part of its build.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Get short SHA
+        id: slug
+        run: echo "sha8=$(echo "${GITHUB_SHA}" | cut -c1-8)" >> "$GITHUB_OUTPUT"
+
+      # ⚠ A SUBMODULE THAT IS A SYMLINK CHECKS OUT AS A DANGLING LINK AND FAILS LATE. c0c202e2 committed
+      # lib/Tempest and lib/ZenKit as symlinks into a developer's home directory; this says so up front.
+      - name: Assert the submodules
+        run: |
+          set -euo pipefail
+          for m in lib/Tempest lib/ZenKit; do
+            mode="$(git ls-files -s "$m" | cut -d' ' -f1)"
+            [ "$mode" = "160000" ] || { echo "!! $m is mode $mode in the commit, not a submodule (160000)" >&2; exit 1; }
+          done
+          [ -f lib/Tempest/Engine/system/api/ps4api.h ] || { echo "!! lib/Tempest is not the fork with the PS4 backend" >&2; exit 1; }
+          grep -q VfsMountMode lib/ZenKit/include/zenkit/Vfs.hh || { echo "!! lib/ZenKit is not the fork with VfsMountMode" >&2; exit 1; }
+          git submodule status --recursive
+
+      - name: Orbis toolchain
+        uses: ./.github/actions/orbis-toolchain
+        with:
+          sdk-tag: ${{ env.OPENORBIS_SDK_TAG }}
+          orbis-compat-ref: ${{ env.ORBIS_COMPAT_REF }}
+          mesa-release: ${{ env.MESA_RELEASE }}
+
+      # glslangValidator: Tempest and OpenGothic compile their shaders to SPIR-V at build time
+      # (Engine/CMakeLists.txt stops without it), the same package upstream's build.yml installs. The
+      # icon is committed (ps4/icon0.png), so no ImageMagick.
+      - name: Build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y -o Acquire::Retries=3
+          sudo apt-get install -y -o Acquire::Retries=3 --no-install-recommends glslang-tools
+          cmake --version | head -1
+          glslangValidator --version | head -1
+
+      # ⚠ PkgTool.Core NEEDS OpenSSL 1.1 AND THE RUNNER HAS OPENSSL 3. It is an old self-contained .NET
+      # build whose crypto shim dlopen()s libssl.so.1.1 by soname. make-pkg.sh reads PS4_PKGTOOL_OPENSSL_LIB
+      # first and only then probes /nix/store, which does not exist on a runner. (Same step as RetroArch.)
+      - name: OpenSSL 1.1 for PkgTool.Core
+        run: |
+          set -euo pipefail
+          lib="${RUNNER_TEMP}/openssl11/lib"
+          if [ ! -e "$lib/libssl.so.1.1" ]; then
+            tmp="$(mktemp -d)"
+            base=http://security.ubuntu.com/ubuntu/pool/main/o/openssl
+            deb="$(curl -sSfL "$base/" \
+                   | grep -oE 'libssl1\.1_[^"]*_amd64\.deb' | sort -V | tail -1)"
+            [ -n "$deb" ] || { echo "!! no libssl1.1 .deb in $base" >&2; exit 1; }
+            echo "== $deb"
+            curl -sSfL -o "$tmp/libssl.deb" "$base/$deb"
+            dpkg-deb -x "$tmp/libssl.deb" "$tmp/x"
+            mkdir -p "$lib"
+            cp -a "$tmp"/x/usr/lib/x86_64-linux-gnu/lib{ssl,crypto}.so.1.1 "$lib"/
+          fi
+          echo "PS4_PKGTOOL_OPENSSL_LIB=$lib" >> "$GITHUB_ENV"
+          ls -l "$lib"
+
+      - name: Compile + package
+        run: |
+          set -euo pipefail
+          ps4/build.sh --work "${RUNNER_TEMP}/opengothic-ps4" --jobs "$(nproc)"
+          echo "PS4_OUT=${RUNNER_TEMP}/opengothic-ps4/build/opengothic" >> "$GITHUB_ENV"
+          # The build writes nothing into the checkout.
+          git status --porcelain --untracked-files=no | tee "${RUNNER_TEMP}/dirty.txt"
+          [ ! -s "${RUNNER_TEMP}/dirty.txt" ] || { echo "!! the build modified tracked files" >&2; exit 1; }
+
+      # ⚠ ASSERT ON ARTEFACTS, NOT ON THE EXIT STATUS: create-fself and make-pkg.sh have both been seen to
+      # exit 0 while producing nothing.
+      - name: Assert the package
+        run: |
+          set -euo pipefail
+          cd "${PS4_OUT}"
+          shopt -s nullglob
+          built=(IV0000-*.pkg)
+          [ "${#built[@]}" -eq 1 ] || {
+            echo "!! expected exactly one IV0000-*.pkg, found ${#built[@]}: ${built[*]:-none}" >&2
+            exit 1; }
+          pkg="${built[0]}"
+          for f in Gothic2Notr.elf eboot.bin "$pkg"; do
+            [ -s "$f" ] || { echo "!! build reported success but $f is missing" >&2; exit 1; }
+          done
+          sz="$(stat -c%s "$pkg")"
+          # The console build is ~51 MB, nearly all of it eboot
+          [ "$sz" -gt 30000000 ] || { echo "!! $pkg is only $sz bytes - that is not an OpenGothic build" >&2; exit 1; }
+          for f in eboot.bin sce_sys/param.sfo sce_sys/icon0.png; do
+            [ -s "pkg-stage/$f" ] || { echo "!! pkg-stage/$f is missing" >&2; exit 1; }
+          done
+          cmp -s pkg-stage/sce_sys/icon0.png "${GITHUB_WORKSPACE}/ps4/icon0.png" \
+            || { echo "!! the packaged icon0.png is not ps4/icon0.png - the ICON parameter did not reach make-pkg.sh" >&2; exit 1; }
+          # The input backend is the keyboard and mouse; a pad import would mean a stale Tempest.
+          imports="$(llvm-nm -u Gothic2Notr.elf)"
+          for s in sceKeyboardReadState sceMouseRead; do
+            grep -qx " *U $s" <<<"$imports" || { echo "!! Gothic2Notr.elf does not import $s" >&2; exit 1; }
+          done
+          ! grep -q ' U scePad' <<<"$imports" || { echo "!! Gothic2Notr.elf still imports scePad*" >&2; exit 1; }
+          {
+            echo "### Package"
+            echo
+            echo "\`$pkg\` - $sz bytes, sha256 \`$(sha256sum "$pkg" | cut -d' ' -f1)\`"
+            echo
+            echo "orbis-compat \`${ORBIS_COMPAT_REF}\`, Mesa \`${MESA_RELEASE}\`, OpenOrbis SDK \`${OPENORBIS_SDK_TAG}\`"
+            echo
+            echo "Tempest \`$(git -C "${GITHUB_WORKSPACE}/lib/Tempest" rev-parse --short=8 HEAD)\`, ZenKit \`$(git -C "${GITHUB_WORKSPACE}/lib/ZenKit" rev-parse --short=8 HEAD)\`"
+            echo
+            echo "#### /app0 file table (staged package)"
+            echo
+            echo '| path | bytes |'
+            echo '|---|---:|'
+            (cd pkg-stage && find . -type f ! -name pkg.gp4 ! -name pkg-build.log -printf '%P\t%s\n' | LC_ALL=C sort \
+              | awk -F'\t' '{printf "| %s | %s |\n", $1, $2}')
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Name the package after the ref
+        id: rename
+        run: |
+          set -euo pipefail
+          # ⚠ FIND THE PACKAGE, DO NOT SPELL IT: the title id and content label live in the CMakeLists.
+          shopt -s nullglob
+          built=("${PS4_OUT}"/IV0000-*.pkg)
+          [ "${#built[@]}" -eq 1 ] || { echo "!! expected exactly one IV0000-*.pkg" >&2; exit 1; }
+          # GITHUB_REF_NAME can contain a slash (a branch like foo/bar, or 12/merge); the filename cannot.
+          ref="${GITHUB_REF_NAME//\//-}"
+          # Tags are opengothic-ps4-v0.92-r1; drop the prefix the tag and the filename already agree on.
+          ref="${ref#opengothic-ps4-}"
+          mkdir -p out
+          out="OpenGothic-PS4-${ref}.pkg"
+          cp -f "${built[0]}" "out/$out"
+          (cd out && sha256sum "$out" > "$out.sha256")
+          echo "pkg=$out" >> "$GITHUB_OUTPUT"
+          echo "== ${built[0]} -> out/$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opengothic-ps4-pkg-${{ steps.slug.outputs.sha8 }}
+          path: out/
+          if-no-files-found: error
+          # The pkg is already compressed; do not spend time zipping it again
+          compression-level: 0
+
+  release:
+    if: github.repository == 'orbis-ports/OpenGothic' && startsWith(github.ref, 'refs/tags/opengothic-ps4-v')
+    needs: pkg
+    runs-on: ubuntu-24.04
+    # Wider than the workflow default, and only here: this job publishes a Release.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history and tags: the release names the upstream commit and tag the port is based on.
+          fetch-depth: 0
+
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: opengothic-ps4-pkg-${{ needs.pkg.outputs.sha8 }}
+          path: out
+
+      # Tags are opengothic-ps4-v<upstream version>-r<port revision>, e.g. opengothic-ps4-v0.92-r1: the
+      # upstream part is the nearest upstream release tag (v0.92) below the merge base with master, so a
+      # tag cannot claim a base the code is not built from.
+      - name: Release metadata
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^opengothic-ps4-v([0-9]+(\.[0-9]+)+)-r([0-9]+)$ ]]; then
+            echo "::error::tag '$TAG' is not opengothic-ps4-v<upstream version>-r<revision> (e.g. opengothic-ps4-v0.92-r1)"
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          revision="${BASH_REMATCH[3]}"
+          base=$(git merge-base HEAD origin/master)
+          upstream=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$base")
+          if [[ "v$version" != "$upstream" ]]; then
+            echo "::error::tag says upstream v$version but the merge base with master is on $upstream"
+            exit 1
+          fi
+          base_describe=$(git describe --tags --match 'v[0-9]*' "$base")
+          {
+            echo "**Based on upstream OpenGothic v${version}** - [Try/OpenGothic@${base:0:8}](https://github.com/Try/OpenGothic/commit/${base}) (\`${base_describe}\`), PS4 port revision ${revision}."
+            echo
+            cat ps4/RELEASE-NOTES.md
+          } > "${RUNNER_TEMP}/release-notes.md"
+          echo "name=OpenGothic ${version} for PS4 (r${revision})" >> "$GITHUB_OUTPUT"
+          echo "notes=${RUNNER_TEMP}/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.meta.outputs.name }}
+          files: |
+            out/${{ needs.pkg.outputs.pkg }}
+            out/${{ needs.pkg.outputs.pkg }}.sha256
+          fail_on_unmatched_files: true
+          # The notes are a file in the repository so they are reviewed in the same diff as the change they
+          # describe - and so the two things a fresh install needs (game data, a keyboard) cannot be forgotten.
+          body_path: ${{ steps.meta.outputs.notes }}
