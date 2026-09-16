@@ -268,17 +268,3 @@ jobs:
           # The notes are a file in the repository so they are reviewed in the same diff as the change they
           # describe - and so the two things a fresh install needs (game data, a keyboard) cannot be forgotten.
           body_path: ${{ steps.meta.outputs.notes }}
-
-      # prx0.com lists the newest release; without this it offers the previous one until its daily build.
-      # WEBSITE_DISPATCH_TOKEN: fine-grained, Contents read and write on orbis-ports/website. Without it
-      # the step warns and the release stands.
-      - name: Tell the website about the release
-        env:
-          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::WEBSITE_DISPATCH_TOKEN is not set; prx0.com picks this release up at its daily build"
-            exit 0
-          fi
-          gh api repos/orbis-ports/website/dispatches -f event_type=port-release
-          echo "== dispatched port-release to orbis-ports/website"
