@@ -31,7 +31,7 @@ on:
       orbis-compat-ref:
         description: orbis-compat commit to build against (a sha, never a branch).
         required: false
-        default: 82db3529be5ea8ec5700d46dbf2efcd41d22a8d0
+        default: cc75949e8f7b4811fa4f4a5bf1c106178a906f07
       mesa-release:
         description: mesa-ps4 release tag whose orbis-mesa-<sha>.tar.gz to consume.
         required: false
@@ -49,7 +49,7 @@ env:
   # verbatim. They are the pins of the build tested on the console (2026-09-15):
   #   orbis-compat 44934e4b   = ps4_create_pkg's ICON parameter, which this CMakeLists passes
   #   orbis-mesa-a4fa6b57f8bd = the mesa-ps4 commit the console build's build-orbis was made from
-  ORBIS_COMPAT_REF: ${{ github.event.inputs.orbis-compat-ref || '82db3529be5ea8ec5700d46dbf2efcd41d22a8d0' }}
+  ORBIS_COMPAT_REF: ${{ github.event.inputs.orbis-compat-ref || 'cc75949e8f7b4811fa4f4a5bf1c106178a906f07' }}
   MESA_RELEASE: ${{ github.event.inputs.mesa-release || 'orbis-mesa-a4fa6b57f8bd' }}
   OPENORBIS_SDK_TAG: v0.5.4
 
