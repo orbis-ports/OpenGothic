@@ -47,8 +47,21 @@ if(PS4)
   if(NOT ORBIS_COMPAT_DIR)
     set(ORBIS_COMPAT_DIR "$ENV{HOME}/src-ps4/orbis-compat")
   endif()
-  if(NOT EXISTS "${ORBIS_COMPAT_DIR}/vkloader/CMakeLists.txt")
-    message(FATAL_ERROR "PS4 build needs orbis-compat at ${ORBIS_COMPAT_DIR} - set -DORBIS_COMPAT_DIR=<path>")
+  # ⚠ THE LOADER MOVED OUT OF THE OVERLAY ON 2026-09-18, to orbis-ports/orbis-porting-kit. The kit
+  # is where the CMake, the loader shim and the examples live; the overlay is include/ and the
+  # archive. ORBIS_KIT_DIR is exported by the kit's setup-orbis action and by an SDK bundle's env.sh;
+  # the fallback is the old location, so this still builds against a bundle cut before that day.
+  if(NOT ORBIS_KIT_DIR AND DEFINED ENV{ORBIS_KIT_DIR})
+    set(ORBIS_KIT_DIR "$ENV{ORBIS_KIT_DIR}")
+  endif()
+  if(ORBIS_KIT_DIR AND EXISTS "${ORBIS_KIT_DIR}/vkloader/CMakeLists.txt")
+    set(OG_VKLOADER_DIR "${ORBIS_KIT_DIR}/vkloader")
+  elseif(EXISTS "${ORBIS_COMPAT_DIR}/vkloader/CMakeLists.txt")
+    set(OG_VKLOADER_DIR "${ORBIS_COMPAT_DIR}/vkloader")
+  else()
+    message(FATAL_ERROR
+      "PS4 build needs the Vulkan loader shim. Looked at ORBIS_KIT_DIR='${ORBIS_KIT_DIR}' and "
+      "ORBIS_COMPAT_DIR='${ORBIS_COMPAT_DIR}'. Set -DORBIS_KIT_DIR=<orbis-porting-kit>.")
   endif()
   if(NOT EXISTS "${OG_PS4_SRC}/og_ps4_boot.h")
     message(FATAL_ERROR "PS4 build needs this title's ps4/ sources at ${OG_PS4_SRC}")
@@ -61,7 +74,7 @@ if(PS4)
   # Two forces stood here until 2026-08-20 and neither did anything: TEMPEST_BUILD_GNM has no reader
   # in the Tempest fork, and TEMPEST_PS4_VULKAN survives only in a commit message that describes it in
   # the past tense. Engine/CMakeLists.txt forces TEMPEST_BUILD_VULKAN ON for PS4, which is the real one.
-  add_subdirectory("${ORBIS_COMPAT_DIR}/vkloader" ps4-vkloader)
+  add_subdirectory("${OG_VKLOADER_DIR}" ps4-vkloader)
 
   # libc++ 11 ships a synopsis-only <concepts>; ZenKit and OpenGothic are C++20.
   # ps4/cxx20shim/ says what this is and what it is not.

@@ -103,7 +103,15 @@ fi
 #
 # Checked by a file each rather than by a revision: any of them may be a symlink to a working tree,
 # a checked-out branch or a fork's commit, and the build cares only that the code is there.
-[[ -f "${ORBIS_COMPAT}/cmake/ps4-openorbis.cmake" && -f "${ORBIS_COMPAT}/vkloader/vkloader.h" ]] || {
+# ⚠ THE TOOLCHAIN FILE AND THE LOADER ARE THE KIT'S SINCE 2026-09-18, and the overlay keeps
+# include/ and the archive. ORBIS_KIT_DIR comes from the kit's setup-orbis action or from an SDK
+# bundle's env.sh; the fallback is the overlay, which still carries both in any bundle cut before
+# that day and in any pinned checkout older than it.
+ORBIS_KIT="${ORBIS_KIT_DIR:-}"
+[[ -n "$ORBIS_KIT" && -f "$ORBIS_KIT/cmake/ps4-openorbis.cmake" ]] || ORBIS_KIT="${ORBIS_COMPAT}"
+ORBIS_TOOLCHAIN_FILE="${ORBIS_KIT}/cmake/ps4-openorbis.cmake"
+
+[[ -f "${ORBIS_TOOLCHAIN_FILE}" && -f "${ORBIS_KIT}/vkloader/vkloader.h" ]] || {
   echo "!! no orbis-compat at ${ORBIS_COMPAT} - clone it, or pass --orbis-compat <dir>" >&2
   exit 1
 }
@@ -137,7 +145,8 @@ orbis_announce_driver
 
 echo "== configuring ${BUILD}"
 cmake -S "${ROOT}" -B "${BUILD}" \
-      -DCMAKE_TOOLCHAIN_FILE="${ORBIS_COMPAT}/cmake/ps4-openorbis.cmake" \
+      -DCMAKE_TOOLCHAIN_FILE="${ORBIS_TOOLCHAIN_FILE}" \
+      -DORBIS_KIT_DIR="${ORBIS_KIT}" \
       -DORBIS_COMPAT_DIR="${ORBIS_COMPAT}" \
       -DORBIS_MESA_BUILD="${ORBIS_MESA_BUILD}" \
       -DORBIS_MESA_SRC="${ORBIS_MESA_DIR}" \
