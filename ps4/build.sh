@@ -51,15 +51,33 @@ fi
 # ⚠ The six lines that cannot be shared - see orbis-compat/scripts/ps4/orbis-env.sh. Sibling
 # directory before the old personal default, because that is what a fresh clone of the orbis-ports
 # organisation looks like: the repositories next to each other.
+# ⚠ TWO REPOSITORIES SINCE 2026-09-18. orbis-compat is include/ and the archive; the porting kit is
+# the toolchain file, the loader shim and these scripts. The overlay is found by a HEADER it owns -
+# probing for scripts/ps4/orbis-env.sh would now find nothing, and before that it would have found
+# the kit and called it the overlay.
 for _c in "${ORBIS_COMPAT_DIR:-}" "$(dirname "${BASH_SOURCE[0]}")/../../orbis-compat" "${HOME}/src-ps4/orbis-compat"; do
-  [[ -n "$_c" && -f "$_c/scripts/ps4/orbis-env.sh" ]] && { ORBIS_COMPAT_DIR="$_c"; break; }
+  [[ -n "$_c" && -f "$_c/include/orbis_prefix.h" ]] && { ORBIS_COMPAT_DIR="$_c"; break; }
 done
 [[ -n "${ORBIS_COMPAT_DIR:-}" ]] || {
   echo "!! orbis-compat not found - clone https://github.com/orbis-ports/orbis-compat next to this" >&2
   echo "   repository, or set ORBIS_COMPAT_DIR / pass --orbis-compat <dir>" >&2
   exit 1
 }
-. "${ORBIS_COMPAT_DIR}/scripts/ps4/orbis-env.sh"
+export ORBIS_COMPAT_DIR
+
+# The kit, the same way. The last candidate is the overlay itself, which carried these scripts until
+# 2026-09-18 - so a pinned checkout older than that still works, and that is the arm in use whenever
+# ORBIS_COMPAT_REF predates the move.
+for _k in "${ORBIS_KIT_DIR:-}" "$(dirname "${BASH_SOURCE[0]}")/../../orbis-porting-kit" "${HOME}/src-ps4/orbis-porting-kit" "${ORBIS_COMPAT_DIR}"; do
+  [[ -n "$_k" && -f "$_k/scripts/ps4/orbis-env.sh" ]] && { ORBIS_KIT_DIR="$_k"; break; }
+done
+[[ -n "${ORBIS_KIT_DIR:-}" ]] || {
+  echo "!! orbis-porting-kit not found - clone https://github.com/orbis-ports/orbis-porting-kit next" >&2
+  echo "   to this repository, or set ORBIS_KIT_DIR" >&2
+  exit 1
+}
+export ORBIS_KIT_DIR
+. "${ORBIS_KIT_DIR}/scripts/ps4/orbis-env.sh"
 ORBIS_COMPAT="${ORBIS_COMPAT_DIR}"
 
 while [[ $# -gt 0 ]]; do
