@@ -78,37 +78,6 @@ if(PS4)
   add_compile_options(${OG_PS4_CXXFLAGS})
   target_compile_options(${PROJECT_NAME} PRIVATE ${OG_PS4_CXXFLAGS})
 
-  # ⚠ THE CONSOLE IS A JAGUAR AND THE COMPILER WAS NOT TOLD. The toolchain file names
-  # --target=x86_64-pc-freebsd12-elf and no -march at all, so clang generated baseline
-  # x86-64: SSE2 and nothing else. This GPU's CPU is btver2 - SSE4.1, SSE4.2, AVX, BMI1,
-  # F16C, POPCNT, AES - and the frame is CPU-bound, measured: at 1080p the title waits
-  # 3% of the window for the GPU and spends ~18.5 ms of a 20.8 ms frame on its own CPU
-  # (BUDGET report, 2026-09-17, 64 windows). Every cycle the vector units do not get is
-  # therefore a cycle off the frame rate.
-  #
-  # It also reaches further than this tree's own code: bullet2 gates its SSE4 paths on
-  # __SSE4_1__, so they were compiled out for the life of this port.
-  #
-  # ⚠ btver2 IS NOT A GUESS ABOUT THIS CONSOLE, it is the console. Set OG_PS4_ARCH to
-  # empty to build the baseline again, which is what an A/B against this needs.
-  set(OG_PS4_ARCH "btver2" CACHE STRING "-march for the PS4 build; empty for the x86-64 baseline")
-  if(OG_PS4_ARCH)
-    add_compile_options("-march=${OG_PS4_ARCH}")
-    target_compile_options(${PROJECT_NAME} PRIVATE "-march=${OG_PS4_ARCH}")
-  endif()
-
-  # Thin LTO. The link already goes through the clang driver with -fuse-ld=lld, and
-  # CMAKE_AR/CMAKE_RANLIB are llvm-ar/llvm-ranlib, so bitcode archives need nothing added.
-  # It does NOT reach orbis-compat or the SDK: those are prebuilt native archives, which is
-  # also why --whole-archive interposition is unaffected.
-  option(OG_PS4_LTO "Build the PS4 title with thin LTO" ON)
-  if(OG_PS4_LTO)
-    add_compile_options(-flto=thin)
-    add_link_options(-flto=thin)
-    target_compile_options(${PROJECT_NAME} PRIVATE -flto=thin)
-    target_link_options(${PROJECT_NAME} PRIVATE -flto=thin)
-  endif()
-
   # ZenKit's mmap stays ON, and is forced rather than left to ZenKit's own default: it
   # was briefly forced OFF here, and a CMake cache remembers that forever - a build
   # directory configured during that window would silently keep the 2.51 GiB read path

@@ -85,15 +85,8 @@ jobs:
           grep -q VfsMountMode lib/ZenKit/include/zenkit/Vfs.hh || { echo "!! lib/ZenKit is not the fork with VfsMountMode" >&2; exit 1; }
           git submodule status --recursive
 
-      # ⚠ THE PUBLISHED ACTION, NOT A COPY. This repository carried its own copy of it, taken from
-      # RetroArch, which took it from sonic3air; by 2026-09-18 the three had drifted to 317 lines
-      # against 332, with different cache keys and different SDK sanity lists, and nothing had
-      # failed to say so. The local copy is deleted in this commit.
-      #
-      # Pinned to a tag: v1 moves with the newest v1.x, and v1.0.0 would not. A port that wants the
-      # toolchain resolution frozen pins the second.
       - name: Orbis toolchain
-        uses: orbis-ports/orbis-porting-kit/.github/actions/setup-orbis@v1
+        uses: ./.github/actions/orbis-toolchain
         with:
           sdk-tag: ${{ env.OPENORBIS_SDK_TAG }}
           orbis-compat-ref: ${{ env.ORBIS_COMPAT_REF }}
