@@ -16,7 +16,7 @@
 #include <vector>
 #include <string>
 #include <cstdlib>   // setenv, for the driver-log environment below
-#include <cstdio>    // fopen/fgets, for /data/tempest-env.txt
+#include <cstdio>    // fopen/fgets, for /data/orbis-env.txt
 #include <cstring>   // strchr/strpbrk, same
 #include "ps4_app.h"
 #include "orbis_paths.h"
@@ -126,17 +126,33 @@ int main(int argc,const char** argv) {
   // KEY=VALUE lines on /data costs an FTP put instead, into a directory the maintainer already has open to fetch
   // the logs. Same trip, next experiment, no rebuild:
   //
-  //     # /data/tempest-env.txt
+  //     # /data/orbis-env.txt
   //     ORBIS_NO_PREFETCH=0
   //     ORBIS_TRUNCATE=7:314
   //
   // OVERWRITE=1 ON PURPOSE: the file is the operator's word. Every applied line is echoed to the title's log, and so is the file's ABSENCE - a knob that
   // can silently not fire has to say that it did not, which is a rule this hunt paid for once already.
+  //
+  // ⚠ THE NAME TO WRITE IS /data/orbis-env.txt SINCE 2026-09-18, AND /data/tempest-env.txt IS STILL READ AFTER IT.
+  // A knob this title sets with setenv() reaches only THIS image: the SDK's libc.a is a real static musl and every
+  // .prx links its own `environ` - measured 2026-08-23 in the RetroArch port, ORBIS_NCPU=1 applied to the eboot and
+  // never reached the core. So anything that has to be read inside a loadable module is read from the FILE, by
+  // orbis-compat's orbis_env_get, and that reader cannot keep a list of every title's file name - a program it has
+  // never heard of would open three paths belonging to other products and find nothing. One well-known path is the
+  // whole mechanism, and /data/orbis-env.txt is it.
+  //
+  // The old name stays until packages that predate this change are out of people's hands: it sits on /data, no
+  // reinstall touches it, and dropping the read would turn an operator's existing knob into a silent no-op. It is
+  // read SECOND on purpose, so a file naming this title still overrides the shared one - the same order
+  // orbis-compat's orbis_env.cpp and RetroArch's platform_orbis.c use, because a title and a module disagreeing
+  // about what the operator asked for costs a console run to notice.
   {
-    FILE* f = ::fopen("/data/tempest-env.txt","r");
-    if(f==nullptr) {
-      ps4_log("env: no /data/tempest-env.txt - the knobs compiled into this build stand");
-      } else {
+    // Returns the number of lines applied, or -1 when the file is not there - the absence is logged by the
+    // caller, once per path, because a knob that can silently not fire has to say that it did not.
+    auto applyEnvFile = [](const char* path) -> int {
+      FILE* f = ::fopen(path,"r");
+      if(f==nullptr)
+        return -1;
       char line[512];
       int  applied = 0;
       while(::fgets(line,sizeof(line),f)!=nullptr) {
@@ -169,12 +185,28 @@ int main(int argc,const char** argv) {
         if(*key=='\0')
           continue;
         ::setenv(key,val,1);
-        ps4_log("env: %s=%s (from /data/tempest-env.txt)",key,val);
+        ps4_log("env: %s=%s (from %s)",key,val,path);
         ++applied;
         }
       ::fclose(f);
-      ps4_log("env: %d knob(s) applied from /data/tempest-env.txt",applied);
+      ps4_log("env: %d knob(s) applied from %s",applied,path);
+      return applied;
+      };
+
+    // The shared name first, the title's own second, so a file naming this title still wins.
+    // /data/tempest-env.txt is DEPRECATED as of 2026-09-18 and is read only for the packages
+    // already flashed; it goes when no release in circulation still writes it.
+    static const char* const envFiles[] = {"/data/orbis-env.txt","/data/tempest-env.txt"};
+    int found = 0;
+    for(const char* path : envFiles) {
+      const int applied = applyEnvFile(path);
+      if(applied<0)
+        ps4_log("env: no %s",path);
+      else
+        ++found;
       }
+    if(found==0)
+      ps4_log("env: no env file at all - the knobs compiled into this build stand");
   }
   // A .pkg launch has no argv, and there is no working directory a title may trust, so
   // the game-data root is DISCOVERED (ps4/og_ps4_boot.h) and handed to CommandLine as a
@@ -196,7 +228,8 @@ int main(int argc,const char** argv) {
   for(const auto& a:ps4Boot.argv)
     ps4Argv.push_back(a.c_str());
 
-  // ⚠ EXTRA ARGV FROM THE ENVIRONMENT, WHICH ON THIS PATH MEANS FROM /data/tempest-env.txt AND WITHOUT A REBUILD.
+  // ⚠ EXTRA ARGV FROM THE ENVIRONMENT, WHICH ON THIS PATH MEANS FROM /data/orbis-env.txt (or the deprecated
+  // /data/tempest-env.txt) AND WITHOUT A REBUILD.
   //
   // OpenGothic's own switches live in argv, and a .pkg launch has none - og_ps4_boot synthesises `-g <root>` plus
   // whatever `arg=` lines /app0/ps4-run.cfg carries. But /app0 is INSIDE the package: changing one switch there

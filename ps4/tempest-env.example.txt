@@ -1,18 +1,32 @@
-# /data/tempest-env.txt — optional: driver knobs and OpenGothic switches, without a rebuild
+# /data/orbis-env.txt — optional: driver knobs and OpenGothic switches, without a rebuild
+#
+# ⚠ THIS FILE GOES TO /data/orbis-env.txt, NOT /data/tempest-env.txt. The old name still works and is
+# still read - packages already on consoles only know that one - but it is DEPRECATED as of
+# 2026-09-18 and will be dropped once no release in circulation writes it.
+#
+# ⚠ AND THE NEW NAME IS THE ONLY ONE A CORE CAN SEE. setenv() in one image is invisible to another
+# here: the SDK's libc.a is a real static musl, so an eboot and every .prx it loads each carry their
+# own `environ`. Measured 2026-08-23 - ORBIS_NCPU=1 written into /data/retroarch-env.txt was applied
+# to the frontend and never reached the core, which still started 5 recompiler workers, and the run
+# read as a clean measurement. Anything inside a loadable module therefore reads the FILE itself,
+# through orbis-compat's orbis_env_get, and that reader cannot know which product loaded it - so it
+# reads one well-known path. That path is /data/orbis-env.txt.
 #
 # ⚠ A NORMAL RUN NEEDS NO FILE AT ALL. The driver ships the configuration it was tested in: 3D images
 # are LINEAR_ALIGNED, tessellation is advertised and its factor ring is backed at Sony's address - all
 # by default. An absent file is a clean run, and the title says so in its log ("env: no
-# /data/tempest-env.txt"). This file is for turning a diagnostic ON, or a default OFF, for one run.
+# /data/orbis-env.txt"). This file is for turning a diagnostic ON, or a default OFF, for one run.
 #
-# ⚠ RETROARCH READS THIS FILE TOO, first, before its own /data/retroarch-env.txt. A knob left here
-# reaches every run of both - which is how a watermark left in on 2026-09-01 froze RetroArch's menu for
-# 1.5 s every 768 frames. Take a knob out when its run is done.
+# ⚠ EVERY TITLE ON THE CONSOLE READS THIS FILE - that is the point of the shared name, and it is the
+# cost of it. RetroArch applies it first, before its own /data/retroarch-env.txt; OpenGothic applies
+# it first, before /data/tempest-env.txt. A knob left here reaches every run of both - which is how a
+# watermark left in on 2026-09-01 froze RetroArch's menu for 1.5 s every 768 frames. Take a knob out
+# when its run is done.
 #
 # The title reads it as the first thing after ps4_app_init and setenv()s every line, overriding the
 # process environment. Every applied line is echoed to the title's log. To change it:
 #
-#     lftp -p 2121 192.168.100.2 -e "cd /data; put tempest-env.txt; bye"
+#     lftp -p 2121 192.168.100.2 -e "cd /data; put orbis-env.txt; bye"
 #
 # Syntax: KEY=VALUE, one per line. Blank lines and lines starting with # are ignored, and whitespace around both
 # sides of the '=' is trimmed — a trailing space in "7:314 " would otherwise read as a different experiment.
