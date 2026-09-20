@@ -637,8 +637,8 @@ struct OrbisMixer {
   //
   // The mixer thread is the honest place: it is the subject of the report and it always runs. It logs
   // from a second thread, which the null backend's pump deliberately never did - acceptable here
-  // because ps4_log formats into a stack buffer and netlog sends one datagram per call, so the worst
-  // case is two lines interleaving, not a corrupted one.
+  // because ps4_log formats into a stack buffer and writes it to the log file in one call, so the
+  // worst case is two lines interleaving, not a corrupted one.
   //
   // Says what is registered and what is playing. It does NOT say whether the port is open or whether
   // this thread is running, and it cannot: both of those are conditions for it being called at all.
@@ -682,8 +682,10 @@ struct OrbisMixer {
   //
   // WHY A REPEATING LINE AND NOT THE ONE AT STARTUP. The first console run of this backend produced NO
   // `sound:` line at all, and the reason was not the backend: the netlog receiver was started after the
-  // title, so every line printed before it was listening went nowhere. A one-shot line at startup is
-  // unobservable in exactly the situation where it matters most - a run somebody is already watching.
+  // title, so every line printed before it was listening went nowhere. That receiver is gone as of
+  // 2026-09-20 and the log is a file that keeps every line whether anyone was watching or not - which
+  // removes this particular cause and not the lesson: a one-shot line at startup is unobservable in
+  // exactly the situation where it matters most, a run somebody is watching as it happens.
   //
   // So the state that decides "is there sound" is restated periodically, from the MIXER THREAD - see
   // census(), which is where the second half of that lesson is written down. Counters are plain and

@@ -108,8 +108,10 @@ if(PS4)
   # source. Turning mmap off would have cost 2.51 GiB of resident VDF to work
   # around a bug that was never in mmap.
 
-  # ps4-app: the klog/netlog tee and the termination policy. It is opt-in - optional/ is deliberately
-  # not part of liborbis-compat.a - and this is where a title opts in.
+  # ps4-app: the klog/file tee and the termination policy. It is opt-in - optional/ is deliberately
+  # not part of liborbis-compat.a - and this is where a title opts in. It logs to
+  # /data/orbis-<app>.log on the console since 2026-09-20 (it was a UDP datagram to the dev host
+  # before that, and linking it obliged -lSceNet; it no longer does).
   add_subdirectory("${ORBIS_COMPAT_DIR}/optional" ps4-common)
   target_link_libraries(${PROJECT_NAME} ps4-app)
   target_link_libraries(${PROJECT_NAME} ps4-vkloader)

@@ -182,8 +182,12 @@ void probeSavePaths(const std::string& root);
 // writable, and abort() from a homebrew title is exactly the CE-34878-0 error dialog
 // with no further information: the single most common outcome of this port right now
 // would be a crash with no evidence at all. These handlers print the exception's type
-// and what() over netlog/klog, then hold the process with ps4_idle_forever() so the
-// log actually leaves the machine.
+// and what() to klog and to the log file on /data, then hold the process with
+// ps4_idle_forever() so the writes actually happen before the kernel reclaims us.
+//
+// ⚠ THE HOLD MATTERED MORE WHEN THE CHANNEL WAS A DATAGRAM - it had to survive long enough for
+// the network stack to send - and it still matters: a file write reaches the kernel per line,
+// but only for a process that got as far as making it.
 //
 // Call AFTER CrashLog::setup(), which is what they are overriding.
 // installCrashHandlers() MOVED to orbis-compat: orbis::installCrashHandlers(), <orbis_boot.h>
