@@ -63,6 +63,16 @@ done
   echo "   repository, or set ORBIS_COMPAT_DIR / pass --orbis-compat <dir>" >&2
   exit 1
 }
+# ⚠ ABSOLUTE, BECAUSE A RELATIVE ONE REACHES cmake AND cmake RESOLVES IT SOMEWHERE ELSE. The sibling
+# candidates above are relative - "$(dirname "${BASH_SOURCE[0]}")/../../..." - so invoked as
+# `bash OpenGothic/ps4/build.sh` from one directory up, ORBIS_KIT_DIR becomes
+# OpenGothic/ps4/../../orbis-porting-kit and lands on `cmake -DCMAKE_TOOLCHAIN_FILE=`, which resolves
+# a relative path against the SOURCE directory rather than the caller's. MEASURED 2026-09-20 by
+# review: "Could not find toolchain file: OpenGothic/ps4/../../orbis-porting-kit/cmake/ps4-openorbis.cmake",
+# exit 1. Run as `cd OpenGothic && ./ps4/build.sh` it passed - by coincidence, because the two
+# resolutions happen to agree from there. Same defect and same day as RetroArch's ps4/build-cores.sh,
+# where it made every core in a sweep report a failed patch.
+ORBIS_COMPAT_DIR="$(cd "$ORBIS_COMPAT_DIR" && pwd -P)"
 export ORBIS_COMPAT_DIR
 
 # The kit, the same way. The last candidate is the overlay itself, which carried these scripts until
@@ -76,6 +86,9 @@ done
   echo "   to this repository, or set ORBIS_KIT_DIR" >&2
   exit 1
 }
+# Absolute for the same reason as the overlay above: this one is handed to cmake as the toolchain
+# file, and a relative toolchain path is resolved against the source directory.
+ORBIS_KIT_DIR="$(cd "$ORBIS_KIT_DIR" && pwd -P)"
 export ORBIS_KIT_DIR
 . "${ORBIS_KIT_DIR}/scripts/ps4/orbis-env.sh"
 ORBIS_COMPAT="${ORBIS_COMPAT_DIR}"
