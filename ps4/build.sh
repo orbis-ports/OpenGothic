@@ -133,6 +133,32 @@ ORBIS_TOOLCHAIN_FILE="${ORBIS_KIT}/cmake/ps4-openorbis.cmake"
   echo "!! no orbis-compat at ${ORBIS_COMPAT} - clone it, or pass --orbis-compat <dir>" >&2
   exit 1
 }
+
+# ⚠ THE KIT'S RUNTIME LIBRARY, AND THIS TITLE IS ONE OF THE THREE THAT CALLS IT. game/main.cpp says
+# `#include <orbis_boot.h>` and calls orbis::installCrashHandlers(); ps4/og_ps4_boot.cpp calls
+# orbis::probeCtype(). Both names were members of liborbis-compat.a and arrived through
+# --whole-archive until 2026-09-20 - which is why this script never had to know about them - and they
+# are liborbis-runtime.a's now, linked ON DEMAND, because orbis_boot.cpp defines two orbis:: names and
+# no libc name. Measured with `ld.lld --why-extract` on this build: orbis_boot.o is extracted and the
+# other three members of that archive are not.
+#
+# ⚠ BUILT HERE RATHER THAN DEMANDED, because a missing archive is a link error 30 000 lines into an
+# OpenGothic build and this is the script people run. runtime/build.sh is idempotent, takes seconds,
+# and needs only the overlay and the SDK that this script has already checked for. The toolchain file
+# finds the result on its own - it looks in <kit>/runtime/build first and in the portlibs prefix
+# second - so nothing below has to name a path.
+ORBIS_RUNTIME_DIR="${ORBIS_KIT}/runtime"
+if [[ -f "${ORBIS_RUNTIME_DIR}/build.sh" ]]; then
+  if [[ ! -f "${ORBIS_RUNTIME_DIR}/build/liborbis-runtime.a" ]]; then
+    echo "== building the kit's runtime library (jit, boot, ime, data)"
+    "${ORBIS_RUNTIME_DIR}/build.sh" >/dev/null || {
+      echo "!! ${ORBIS_RUNTIME_DIR}/build.sh failed - run it directly to see why" >&2; exit 1; }
+  fi
+else
+  # A kit or bundle from before 2026-09-20, where orbis_boot.cpp is still a member of the overlay's
+  # archive and arrives force-loaded. Nothing to build, and nothing to say about it.
+  :
+fi
 [[ -f "${ROOT}/lib/Tempest/Engine/system/api/ps4api.h" ]] || {
   echo "!! lib/Tempest has no Orbis SystemApi backend - point it at the Tempest fork" >&2
   exit 1
