@@ -86,6 +86,15 @@ if(PS4)
   # <concepts> must not have this directory's `concepts` file found ahead of its own. orbsdk builds
   # libc++ 22 from source (orbsdk decision-2) and turns this off.
   option(OG_PS4_CXX20_SHIM "Force-include the C++20 shim for the SDK's libc++ 11" ON)
+  # OG_PS4_STAT_INTERPOSER OFF when the overlay's stat interposer is not in the link — orbsdk's
+  # narrow ABI, where the headers match the kernel and fstat is libkernel's own. The boot probe
+  # then reads the kernel's bytes with plain fstat instead of the interposer's helpers.
+  option(OG_PS4_STAT_INTERPOSER "The overlay's stat interposer is linked" ON)
+  if(OG_PS4_STAT_INTERPOSER)
+    add_compile_definitions(OG_PS4_STAT_INTERPOSER=1)
+  else()
+    add_compile_definitions(OG_PS4_STAT_INTERPOSER=0)
+  endif()
   if(OG_PS4_CXX20_SHIM)
     set(OG_PS4_CXXFLAGS "-I${OG_PS4_SHIM}" "-include" "${OG_PS4_SHIM}/ps4_cxx20_shim.h"
                         -Wno-error "-Wno-#warnings")

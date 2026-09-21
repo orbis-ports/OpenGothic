@@ -271,9 +271,19 @@ void probeVdfRead(const std::string& root) {
   // size should be, and printing BOTH is what turns the layout note in the overlay's stat interposer
   // from a reconstruction into a measurement.
   unsigned char raw[orbis::kSonyStatSize] = {};
+#if OG_PS4_STAT_INTERPOSER
   const int     rcr = orbis::rawKernelFstat(fd,raw);
   const int64_t q48 = orbis::sonyStatQword(raw,orbis::kSonyStatSizeOff);
   const int64_t q50 = orbis::sonyStatQword(raw,orbis::kSonyStatBlocksOff);
+#else
+  // No interposer in the link (orbsdk, narrow ABI): fstat is libkernel's own and writes the
+  // kernel's layout into the buffer unchanged, so it IS the raw read. The helpers that did this
+  // live in the interposer's archive member, which a narrow build does not link.
+  const int rcr = ::fstat(fd,reinterpret_cast<struct stat*>(raw));
+  int64_t q48 = 0, q50 = 0;
+  std::memcpy(&q48,raw+orbis::kSonyStatSizeOff,sizeof(q48));
+  std::memcpy(&q50,raw+orbis::kSonyStatBlocksOff,sizeof(q50));
+#endif
   ps4_log("boot: vdf probe '%s': kernel bytes rc=%d raw@0x48=%lld (size) raw@0x50=%lld (blocks)",
           path.c_str(),rcr,(long long)q48,(long long)q50);
 
@@ -287,8 +297,13 @@ void probeVdfRead(const std::string& root) {
           (long long)q50);
 
   if(rcs==0 && st.st_size==q48 && q48>0)
+#if OG_PS4_STAT_INTERPOSER
     ps4_log("boot: vdf probe - VERDICT: stat interposition ACTIVE and correct "
             "(st_size %lld == kernel raw@0x48).",(long long)q48);
+#else
+    ps4_log("boot: vdf probe - VERDICT: no interposer, and the header agrees with the kernel "
+            "(st_size %lld == kernel raw@0x48).",(long long)q48);
+#endif
   else if(rcs==0 && st.st_size==q50)
     ps4_log("boot: vdf probe - VERDICT: stat interposition DID NOT TAKE - fstat still "
             "returns the 0x50 quadword. Check symbol resolution.");
