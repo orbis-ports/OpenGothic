@@ -82,8 +82,16 @@ if(PS4)
   # musl + libc++ 11 also promote ~190 -Wconversion/-Wabsolute-value warnings out of the
   # math headers alone, in files nobody here owns; the -Werror further down is dropped
   # for the same reason. Both come back the moment the SDK's libc++ is new enough.
-  set(OG_PS4_CXXFLAGS "-I${OG_PS4_SHIM}" "-include" "${OG_PS4_SHIM}/ps4_cxx20_shim.h"
-                      -Wno-error "-Wno-#warnings")
+  # OG_PS4_CXX20_SHIM OFF when the C++ runtime is not the SDK's libc++ 11: a libc++ with a real
+  # <concepts> must not have this directory's `concepts` file found ahead of its own. orbsdk builds
+  # libc++ 22 from source (orbsdk decision-2) and turns this off.
+  option(OG_PS4_CXX20_SHIM "Force-include the C++20 shim for the SDK's libc++ 11" ON)
+  if(OG_PS4_CXX20_SHIM)
+    set(OG_PS4_CXXFLAGS "-I${OG_PS4_SHIM}" "-include" "${OG_PS4_SHIM}/ps4_cxx20_shim.h"
+                        -Wno-error "-Wno-#warnings")
+  else()
+    set(OG_PS4_CXXFLAGS -Wno-error "-Wno-#warnings")
+  endif()
   # Twice, and it is not redundant: a target's COMPILE_OPTIONS is seeded from the
   # directory property WHEN THE TARGET IS CREATED, and add_executable() above already
   # ran. add_compile_options reaches ZenKit/dmusic/bullet (added later, and the reason
@@ -350,9 +358,12 @@ endif()
 if(PS4)
   set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".elf")
   ps4_create_eboot(${PROJECT_NAME})
+  # Overridable so a build on a different runtime can be installed beside the known-good one.
+  set(OG_PS4_TITLE_ID "TMPS10021" CACHE STRING "PS4 title id for the package")
+  set(OG_PS4_TITLE "OpenGothic" CACHE STRING "Title shown on the home screen")
   ps4_create_pkg(${PROJECT_NAME}
-    TITLE_ID      TMPS10021
-    TITLE         "OpenGothic"
+    TITLE_ID      ${OG_PS4_TITLE_ID}
+    TITLE         "${OG_PS4_TITLE}"
     # 16 chars, which is the cap: make-pkg.sh does `${CONTENT_LABEL:0:16}` with no warning. This
     # read TEMPESTOPENGOTHIC - 17 - so every package ever built was already
     # IV0000-TMPS10021_00-TEMPESTOPENGOTHI and this file named something that never shipped. The
