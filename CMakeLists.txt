@@ -76,16 +76,10 @@ if(PS4)
   # the past tense. Engine/CMakeLists.txt forces TEMPEST_BUILD_VULKAN ON for PS4, which is the real one.
   add_subdirectory("${OG_VKLOADER_DIR}" ps4-vkloader)
 
-  # libc++ 11 ships a synopsis-only <concepts>; ZenKit and OpenGothic are C++20.
-  # ps4/cxx20shim/ says what this is and what it is not.
-  set(OG_PS4_SHIM "${OG_PS4_SRC}/cxx20shim")
-  # musl + libc++ 11 also promote ~190 -Wconversion/-Wabsolute-value warnings out of the
-  # math headers alone, in files nobody here owns; the -Werror further down is dropped
-  # for the same reason. Both come back the moment the SDK's libc++ is new enough.
-  # OG_PS4_CXX20_SHIM OFF when the C++ runtime is not the SDK's libc++ 11: a libc++ with a real
-  # <concepts> must not have this directory's `concepts` file found ahead of its own. orbsdk builds
-  # libc++ 22 from source (orbsdk decision-2) and turns this off.
-  option(OG_PS4_CXX20_SHIM "Force-include the C++20 shim for the SDK's libc++ 11" ON)
+  # This branch builds against orbsdk, whose libc++ is built from LLVM source and has a real
+  # <concepts>, so the C++20 shim the SDK's libc++ 11 needed is gone (orbsdk ORB-1). -Wno-error stays
+  # for now: the ~190 warnings libc++ 11's math headers produced are expected to be gone with it,
+  # but that is a separate, measured change, not one to make blind.
   # OG_PS4_STAT_INTERPOSER OFF when the overlay's stat interposer is not in the link — orbsdk's
   # narrow ABI, where the headers match the kernel and fstat is libkernel's own. The boot probe
   # then reads the kernel's bytes with plain fstat instead of the interposer's helpers.
@@ -95,12 +89,7 @@ if(PS4)
   else()
     add_compile_definitions(OG_PS4_STAT_INTERPOSER=0)
   endif()
-  if(OG_PS4_CXX20_SHIM)
-    set(OG_PS4_CXXFLAGS "-I${OG_PS4_SHIM}" "-include" "${OG_PS4_SHIM}/ps4_cxx20_shim.h"
-                        -Wno-error "-Wno-#warnings")
-  else()
-    set(OG_PS4_CXXFLAGS -Wno-error "-Wno-#warnings")
-  endif()
+  set(OG_PS4_CXXFLAGS -Wno-error "-Wno-#warnings")
   # Twice, and it is not redundant: a target's COMPILE_OPTIONS is seeded from the
   # directory property WHEN THE TARGET IS CREATED, and add_executable() above already
   # ran. add_compile_options reaches ZenKit/dmusic/bullet (added later, and the reason
